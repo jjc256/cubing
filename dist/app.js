@@ -1,52 +1,57 @@
 import {parse} from './solver.js';
 import {drawCube} from './orientation.js';
-import {explainSolution,colorNames} from './pairs.js';
+import {inspectionHints} from './inspection.js';
 const $=id=>document.getElementById(id);
 const goalNames=['Cross','1 X-cross','2 X-cross'];
-let worker,run=0,original='',play=[],step=0,selected,chosen,guide;
+let worker,run=0,original='',play=[],step=0,selected,chosen;
 
 function preview(){
  const alg=[original,chosen?.rotation||'',...play.slice(0,step)].join(' ');
- drawCube($('cube'),alg,guide?.frames[step].pairs||[]);
- renderPairGuide();
+ drawCube($('cube'),alg);
  $('orientation-label').textContent=chosen?`White bottom · ${chosen.front} front`:'White top · Green front';
  $('preview-rotation').textContent=chosen?`Rotation applied: ${chosen.rotation}`:'';
  $('step-label').textContent=chosen?(step?`${step} / ${play.length} · ${play[step-1]}`:`0 / ${play.length}`):'Scramble';
  $('prev').disabled=step===0;
  $('next').disabled=step===play.length;
 }
-function showScramble(){selected?.classList.remove('selected');selected=null;chosen=null;guide=null;play=[];step=0;preview();}
+function showScramble(){selected?.classList.remove('selected');selected=null;chosen=null;play=[];step=0;preview();}
 function stop(){worker?.terminate();worker=null;$('cancel').hidden=true;}
-function solutionButton(solution,requiredPairs){
- const explanation=explainSolution(original,solution,requiredPairs);
+function solutionButton(solution){
  const button=document.createElement('button');button.className='solution';
  const meta=document.createElement('span');meta.className='solution-meta';
  const rotation=document.createElement('span');rotation.className='rotation';rotation.textContent=solution.rotation;
  const front=document.createElement('span');front.textContent=`${solution.front} front`;
- const slots=document.createElement('span');slots.textContent=requiredPairs?explanation.targets.map(p=>`${p.label}: ${p.slot}`).join(' · '):'';
+ const slots=document.createElement('span');slots.textContent=solution.slots.join(' + ');
  meta.append(rotation,front,slots);
- const alg=document.createElement('span');alg.className='solution-alg';if(!solution.alg)alg.textContent='Already solved';else solution.alg.split(' ').forEach((move,i)=>{const token=document.createElement('span');token.className='annotated-move';token.append(document.createTextNode(move));for(const event of explanation.frames[i+1].events.filter(e=>e.kind==='inserted'||e.kind==='paired')){const sign=document.createElement('sup');sign.className='pair-sign';sign.textContent=event.label+(event.kind==='inserted'?'✓':'+');sign.title=event.text;sign.setAttribute('aria-label',event.text);token.append(sign);}alg.append(token,document.createTextNode(' '));});
+ const alg=document.createElement('span');alg.className='solution-alg';alg.textContent=solution.alg||'Already solved';
  button.append(meta,alg);
- button.onclick=()=>{selected?.classList.remove('selected');selected=button;button.classList.add('selected');chosen=solution;guide=explanation;play=solution.alg?solution.alg.split(' '):[];step=0;preview();};
+ button.onclick=()=>{selected?.classList.remove('selected');selected=button;button.classList.add('selected');chosen=solution;play=solution.alg?solution.alg.split(' '):[];step=0;preview();};
  return button;
 }
-function renderPairGuide(){
- const panel=$('pair-guide');panel.hidden=!guide?.targets.length;if(panel.hidden)return;
- const frame=guide.frames[step];$('pair-legend').replaceChildren();
- for(const pair of frame.pairs){
-  const item=document.createElement('div');item.className='pair-legend-item';
-  const heading=document.createElement('strong');heading.textContent=`${pair.label} · ${pair.slot} · ${pair.colors.map(c=>colorNames[c]).join(' / ')}`;
-  const state=document.createElement('div');state.className='pair-state';state.textContent=`${pair.status[0].toUpperCase()+pair.status.slice(1)} · corner ${pair.cornerPosition} · edge ${pair.edgePosition}`;
-  item.append(heading,state);$('pair-legend').append(item);
+function solutionEntry(solution,requiredPairs){
+ if(!requiredPairs)return solutionButton(solution);
+ const info=inspectionHints(original,solution,requiredPairs),entry=document.createElement('div');entry.className='inspection-entry';
+ const setup=document.createElement('div');setup.className='inspection-setup';
+ const frame=document.createElement('span');frame.textContent=`${solution.rotation} · ${solution.front} front · ${solution.slots.slice(0,requiredPairs).join(' + ')}`;
+ const inspect=document.createElement('button');inspect.className='text-button';inspect.textContent='Inspect setup';
+ const playback=solutionButton(solution);
+ inspect.onclick=()=>{playback.onclick();};setup.append(frame,inspect);entry.append(setup);
+ const reference=document.createElement('p');reference.className='inspection-frame';reference.textContent=info.frame;entry.append(reference);
+ const labels={'cross-block':'Preserved cross block','existing-pair':'Existing F2L pair','one-turn-block':'One-turn cross block','two-turn-block':'Two-turn cross block','fixed-edge':'Solved edge to keep','fixed-corner':'Solved corner to keep','one-turn-pair':'One-turn pairing','two-turn-pair':'Two-turn pairing','predicted-d-finish':'Predict the D-layer finish',none:'No simple initial cue'};
+ for(const hint of info.hints){
+  const section=document.createElement('div');section.className='inspection-hint';
+  const heading=document.createElement('h3');heading.textContent=`${hint.title} · ${labels[hint.kind]}`;
+  const notice=document.createElement('p');notice.textContent=hint.notice;
+  const approach=document.createElement('p');approach.className='inspection-approach';approach.textContent=hint.approach;
+  section.append(heading,notice,approach);
+  if(hint.steps.length){
+   const details=document.createElement('details');details.className='inspection-plan';
+   const summary=document.createElement('summary');summary.textContent='Explain this solution’s plan';details.append(summary);
+   const list=document.createElement('ol');
+   for(const phase of hint.steps){const item=document.createElement('li');if(phase.moves){const moves=document.createElement('code');moves.textContent=phase.moves;item.append(moves,document.createTextNode(' — '));}item.append(document.createTextNode(phase.text));list.append(item);}details.append(list);section.append(details);
+  }entry.append(section);
  }
- $('pair-step-note').textContent=step?frame.note:`After setup: cross ${frame.cross}/4. Paired means the corner and edge are joined with matching colors; inserted means both are solved in their slot.`;
- $('pair-timeline').replaceChildren();
- const key=document.createElement('p');key.className='pair-key';key.textContent='A+ / B+ = paired · A✓ / B✓ = inserted';$('pair-timeline').append(key);
- for(let i=1;i<guide.frames.length;i++){
-  const row=document.createElement('button');row.className='timeline-step';row.classList.toggle('current',i===step);row.setAttribute('aria-pressed',String(i===step));
-  const move=document.createElement('span');move.className='timeline-move';move.textContent=`${i}. ${guide.frames[i].move}`;
-  const note=document.createElement('span');note.textContent=guide.frames[i].note;row.append(move,note);row.onclick=()=>{step=i;preview();};$('pair-timeline').append(row);
- }
+ const reveal=document.createElement('details');reveal.className='solution-reveal';const summary=document.createElement('summary');summary.textContent='Show optimal moves';reveal.append(summary,playback);entry.append(reveal);return entry;
 }
 function result(data){
  const card=$(`goal-${data.pairs}`);card.replaceChildren();
@@ -55,11 +60,11 @@ function result(data){
  const count=document.createElement('div');count.className='move-count';
  const strong=document.createElement('strong');strong.textContent=data.depth;
  const unit=document.createElement('span');unit.textContent='moves · optimal';count.append(strong,unit);head.append(name,count);
- card.append(head,solutionButton(data.solutions[0],data.pairs));
+ card.append(head,solutionEntry(data.solutions[0],data.pairs));
  if(data.solutions.length>1){
   const details=document.createElement('details');details.className='alternatives';
   const summary=document.createElement('summary');summary.textContent=`${data.solutions.length-1} more optimal solutions`;
-  details.append(summary);data.solutions.slice(1).forEach(s=>details.append(solutionButton(s,data.pairs)));card.append(details);
+  details.append(summary);data.solutions.slice(1).forEach(s=>details.append(solutionEntry(s,data.pairs)));card.append(details);
  }
 }
 function analyze(){

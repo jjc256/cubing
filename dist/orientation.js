@@ -53,13 +53,13 @@ export function stickersFor(alg){
  }
  return stickers;
 }
-export function drawCube(container,alg,pairStates=[]){
+export function drawCube(container,alg){
  const stickers=stickersFor(alg),layout={U:{r:[1,0,0],d:[0,0,1],cell:[2,1]},R:{r:[0,0,-1],d:[0,-1,0],cell:[3,2]},F:{r:[1,0,0],d:[0,-1,0],cell:[2,2]},D:{r:[1,0,0],d:[0,0,-1],cell:[2,3]},L:{r:[0,0,1],d:[0,-1,0],cell:[1,2]},B:{r:[-1,0,0],d:[0,-1,0],cell:[4,2]}};
  container.replaceChildren();
  for(const [f,v]of Object.entries(layout)){
   const el=document.createElement('div');el.className='face';el.style.gridColumn=v.cell[0];el.style.gridRow=v.cell[1];el.setAttribute('aria-label',f+' face');
   for(let y=-1;y<=1;y++)for(let x=-1;x<=1;x++){
-   const s=stickers.find(s=>dot(s.n,normals[f])===1&&dot(s.p,v.r)===x&&dot(s.p,v.d)===y),cell=document.createElement('div');cell.className='sticker';cell.style.background=colors[s.color];cell.dataset.color=s.color;if(x===0&&y===0)cell.textContent=f;const pair=pairStates.find(pair=>pair.positions.includes(s.p.join(',')));if(pair){cell.classList.add('target-piece');cell.dataset.pair=pair.label;cell.setAttribute('aria-label',`Pair ${pair.label} sticker`);const badge=document.createElement('span');badge.className='piece-label';badge.textContent=pair.label;cell.append(badge);}el.append(cell);
+   const s=stickers.find(s=>dot(s.n,normals[f])===1&&dot(s.p,v.r)===x&&dot(s.p,v.d)===y),cell=document.createElement('div');cell.className='sticker';cell.style.background=colors[s.color];cell.dataset.color=s.color;if(x===0&&y===0)cell.textContent=f;el.append(cell);
   }container.append(el);
  }
 }

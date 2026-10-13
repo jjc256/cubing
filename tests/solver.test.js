@@ -94,17 +94,28 @@ for(const r of results){assert.equal(new Set(r.solutions.map(rotationKey)).size,
 delete globalThis.onmessage;delete globalThis.postMessage;
 console.log('Worker integration passed for all three goals.');
 
-import {explainSolution} from '../dist/pairs.js';
-const pairFixture=explainSolution('',{rotation:'z2',slots:['FR'],alg:"R F F' R'"},1);
-assert.deepEqual(pairFixture.frames.map(f=>f.pairs[0].status),['inserted','paired','separated','paired','inserted']);
-assert.deepEqual(pairFixture.targets[0].colors,['F','L']);
-assert.equal(pairFixture.frames[0].pairs[0].cornerPosition,'DFR');
-assert.equal(pairFixture.frames[0].pairs[0].edgePosition,'FR');
-assert.equal(pairFixture.frames[1].events[0].kind,'paired');
-assert.equal(pairFixture.frames[2].events[0].kind,'separated');
-assert.equal(pairFixture.frames.at(-1).events[0].kind,'inserted');
-assert.equal(pairFixture.frames.at(-1).cross,4);
-assert.equal(explainSolution('',{rotation:'z2',slots:['FR'],alg:''},0).targets.length,0);
-for(const rotation of ['z2','z2 y','z2 y2',"z2 y'"]){const g=explainSolution('',{rotation,slots:['FR','BL'],alg:''},2);assert.equal(g.targets.length,2);assert.deepEqual(g.frames[0].pairs.map(p=>p.status),['inserted','inserted']);assert.deepEqual(g.targets.map(p=>p.label),['A','B']);}
-for(const result of results){for(const solution of result.solutions){const g=explainSolution('R2 L2 F2 B2',solution,result.pairs);assert.equal(g.frames.length,parse(solution.alg).length+1);assert.ok(g.frames.at(-1).pairs.every(p=>p.status==='inserted'));assert.equal(g.frames.at(-1).cross,4);assert.ok(g.frames.every(f=>f.pairs.every(p=>p.cornerPosition&&p.edgePosition&&p.positions.length===2)));}}
-console.log('Pair labels, all front orientations, forming/splitting/insertion events, and solved endpoints passed.');
+import {inspectionHints,connected} from '../dist/inspection.js';
+const keyhole=inspectionHints("U' L D L'",{rotation:'z2',front:'Green',slots:['FR'],alg:"R U' R' D"},1).hints[0];
+assert.equal(keyhole.kind,'cross-block');
+assert.ok(keyhole.notice.includes('DLF')&&keyhole.notice.includes('(DL)')&&keyhole.notice.includes('UF'));
+assert.deepEqual(keyhole.evidence.finish,{anchor:0,edgeAt:3,cornerPosition:'DLF',edgePosition:'FR',move:'D',keyhole:true});
+assert.ok(keyhole.steps.some(s=>s.moves==="R U' R'"&&s.text.includes('without moving that corner')));
+assert.equal(keyhole.steps.at(-1).moves,'D');
+const existingPair=inspectionHints('L D',{rotation:'z2',front:'Green',slots:['FR'],alg:"U' R'"},1).hints[0];
+assert.equal(existingPair.kind,'existing-pair');
+const difficult=inspectionHints('F R B D L',{rotation:'z2',front:'Green',slots:['FR'],alg:"R' U' B' L' F'"},1).hints[0];
+assert.equal(difficult.kind,'none');assert.ok(difficult.approach.includes('No simple inspection cue'));
+assert.equal(inspectionHints('',{rotation:'z2',front:'Green',slots:[],alg:''},0).hints.length,0);
+// Mere adjacency is insufficient: shared sticker orientation must agree.
+const model=stickersFor('z2'),corner=model.filter(s=>s.p.join()==='1,-1,1'),edge=model.filter(s=>s.p.join()==='0,-1,1');
+assert.ok(connected(corner,edge));
+const flipped=edge.map((s,i)=>({...s,n:edge[1-i].n}));assert.equal(connected(corner,flipped),false);
+for(const result of results)for(const solution of result.solutions){const inspection=inspectionHints('R2 L2 F2 B2',solution,result.pairs);assert.equal(inspection.hints.length,result.pairs);assert.ok(inspection.hints.every(h=>h.notice&&h.approach));}
+for(let sample=0;sample<8;sample++){
+ const scramble=Array.from({length:20},()=>names[Math.floor(random()*18)]).join(' ');
+ for(let pairs=1;pairs<=2;pairs++){
+  const r=solve(apply(normalizeScramble(scramble)),pairs,tables,{limit:3});
+  for(const answer of r.solutions){const oriented=orientSolution(answer),hints=inspectionHints(scramble,oriented,pairs);assert.equal(hints.hints.length,pairs);assert.ok(physicalGoal(scramble+' '+oriented.rotation+' '+oriented.alg,pairs));for(const hint of hints.hints){if(hint.evidence.finish?.keyhole)assert.ok(hint.evidence.finish.edgeAt>hint.evidence.finish.anchor);if(hint.kind==='none')assert.equal(hint.steps.length,0);}}
+ }
+}
+console.log('Inspection clues, preserved pair priority, keyhole finish, false-positive rejection, complex-route fallback, and full-scramble integration passed.');
