@@ -93,3 +93,18 @@ const results=messages.filter(m=>m.type==='result');assert.equal(results.length,
 for(const r of results){assert.equal(new Set(r.solutions.map(rotationKey)).size,r.solutions.length);for(let i=1;i<r.solutions.length;i++)assert.ok(compareOrientedSolutions(r.solutions[i-1],r.solutions[i])<=0);for(const s of r.solutions)assert.ok(physicalGoal('R2 L2 F2 B2 '+s.rotation+' '+s.alg,r.pairs));}
 delete globalThis.onmessage;delete globalThis.postMessage;
 console.log('Worker integration passed for all three goals.');
+
+import {explainSolution} from '../dist/pairs.js';
+const pairFixture=explainSolution('',{rotation:'z2',slots:['FR'],alg:"R F F' R'"},1);
+assert.deepEqual(pairFixture.frames.map(f=>f.pairs[0].status),['inserted','paired','separated','paired','inserted']);
+assert.deepEqual(pairFixture.targets[0].colors,['F','L']);
+assert.equal(pairFixture.frames[0].pairs[0].cornerPosition,'DFR');
+assert.equal(pairFixture.frames[0].pairs[0].edgePosition,'FR');
+assert.equal(pairFixture.frames[1].events[0].kind,'paired');
+assert.equal(pairFixture.frames[2].events[0].kind,'separated');
+assert.equal(pairFixture.frames.at(-1).events[0].kind,'inserted');
+assert.equal(pairFixture.frames.at(-1).cross,4);
+assert.equal(explainSolution('',{rotation:'z2',slots:['FR'],alg:''},0).targets.length,0);
+for(const rotation of ['z2','z2 y','z2 y2',"z2 y'"]){const g=explainSolution('',{rotation,slots:['FR','BL'],alg:''},2);assert.equal(g.targets.length,2);assert.deepEqual(g.frames[0].pairs.map(p=>p.status),['inserted','inserted']);assert.deepEqual(g.targets.map(p=>p.label),['A','B']);}
+for(const result of results){for(const solution of result.solutions){const g=explainSolution('R2 L2 F2 B2',solution,result.pairs);assert.equal(g.frames.length,parse(solution.alg).length+1);assert.ok(g.frames.at(-1).pairs.every(p=>p.status==='inserted'));assert.equal(g.frames.at(-1).cross,4);assert.ok(g.frames.every(f=>f.pairs.every(p=>p.cornerPosition&&p.edgePosition&&p.positions.length===2)));}}
+console.log('Pair labels, all front orientations, forming/splitting/insertion events, and solved endpoints passed.');

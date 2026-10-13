@@ -31,3 +31,7 @@ Random-state scramble generation uses cubing.js: https://js.cubing.net/cubing/sc
 Import `jjc256/cubing` into Vercel and deploy its `main` branch with the repository root as the Root Directory. The checked-in `vercel.json` selects the Other framework preset, runs `npm run build`, and serves `dist/`. The build runs the solver tests; application files are already static and require no compilation. No environment variables or backend services are required. Keep module assets and `worker.js` at their existing paths; do not rewrite every request to index.html.
 
 Vercel configuration reference: https://vercel.com/docs/project-configuration/vercel-json
+
+## Pair explanations
+
+Select an X-cross solution to label its target corner and edge pieces A (and B for two pairs) on the cube net. The guide lists each pair's side colors, intended slot, current piece positions, and whether the pair is separated, paired, or inserted. Small `A+`/`B+` signs mark moves that join pairs; `A✓`/`B✓` signs mark insertion into solved slots. A clickable move timeline shows pair movements, splitting, insertion, and cross progress. These are observed state changes from replay, not claims about the intended purpose of a move. A pair counts as formed only when its two shared colors align and its pieces are correctly connected; adjacency alone is insufficient. If the algorithm solves extra pairs, only the one or two required target pairs are labeled.
