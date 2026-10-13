@@ -119,3 +119,24 @@ for(let sample=0;sample<8;sample++){
  }
 }
 console.log('Inspection clues, preserved pair priority, keyhole finish, false-positive rejection, complex-route fallback, and full-scramble integration passed.');
+
+import {buildExtendedTables,buildDeepTables} from '../dist/solver.js';
+const extended=buildExtendedTables();extended.blocks=buildDeepTables();
+assert.throws(()=>solve(solved(),5,tables));assert.throws(()=>solve(solved(),3.5,tables));
+for(const scramble of ['', 'R','F2',"R U F'","D R2 F"]){for(const pairs of [3,4]){const initial=apply(scramble),r=solve(initial,pairs,tables,{extendedTables:extended,limit:5});assert.equal(r.depth,bfs(initial,pairs,3));for(const solution of r.solutions){let end=initial;for(const m of parse(solution.alg))end=move(end,m);assert.ok(goal(end,pairs));}}}
+const extendedScramble="R U2 F' L2 D B2 R2 F U' B L' D2 R' U F2 D' L U2 B' R";
+let lastDepth=0;
+for(const pairs of [3,4]){
+ const initial=apply(normalizeScramble(extendedScramble));
+ const result=solve(initial,pairs,tables,{extendedTables:extended,limit:1,maxNodes:100000000});assert.ok(result.depth>=lastDepth);lastDepth=result.depth;
+ const solution=orientSolution(result.solutions[0]);assert.ok(physicalGoal(extendedScramble+' '+solution.rotation+' '+solution.alg,pairs));assert.ok(solution.slots.length>=pairs);
+ const hints=inspectionHints(extendedScramble,solution,pairs);assert.equal(hints.hints.length,pairs);
+}
+// The Worker exposes larger goals on demand and returns all requested goals.
+const extendedMessages=[];globalThis.onmessage=null;globalThis.postMessage=m=>extendedMessages.push(m);
+// The imported Worker module retains its handler; reimport with a new URL for this request.
+await import('../dist/worker.js?extended-test');globalThis.onmessage({data:{scramble:'R2 L2 F2 B2',goals:[3,4]}});
+const extendedResults=extendedMessages.filter(m=>m.type==='result');assert.deepEqual(extendedResults.map(r=>r.pairs),[3,4]);assert.equal(extendedMessages.at(-1).type,'done');
+for(const r of extendedResults)for(const solution of r.solutions){assert.ok(physicalGoal('R2 L2 F2 B2 '+solution.rotation+' '+solution.alg,r.pairs));assert.equal(inspectionHints('R2 L2 F2 B2',solution,r.pairs).hints.length,r.pairs);}
+delete globalThis.onmessage;delete globalThis.postMessage;
+console.log('3/4 X-cross BFS optimality, full-scramble replay, inspection hints, and on-demand Worker integration passed.');

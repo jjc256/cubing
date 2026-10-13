@@ -2,8 +2,9 @@ import {parse} from './solver.js';
 import {drawCube} from './orientation.js';
 import {inspectionHints} from './inspection.js';
 const $=id=>document.getElementById(id);
-const goalNames=['Cross','1 X-cross','2 X-cross'];
+const goalNames=['Cross','1 X-cross','2 X-cross','3 X-cross','4 X-cross'];
 let worker,run=0,original='',play=[],step=0,selected,chosen;
+let queuedGoals=[];const completedGoals=new Set();
 
 function preview(){
  const alg=[original,chosen?.rotation||'',...play.slice(0,step)].join(' ');
@@ -67,32 +68,59 @@ function result(data){
   details.append(summary);data.solutions.slice(1).forEach(s=>details.append(solutionEntry(s,data.pairs)));card.append(details);
  }
 }
-function analyze(){
- const text=$('scramble').value.trim();
- try{if(!text)throw Error('Generate or enter a scramble first.');parse(text);}catch(e){$('error').textContent=e.message;return;}
- stop();run++;$('error').textContent='';original=text;showScramble();$('cancel').hidden=false;$('status').textContent='Preparing search…';$('results').replaceChildren();
- for(let pairs=0;pairs<3;pairs++){
-  const card=document.createElement('article');card.id=`goal-${pairs}`;card.className='result';
-  const h=document.createElement('h2');h.textContent=goalNames[pairs];
-  const p=document.createElement('p');p.className='pending';p.textContent='Waiting';card.append(h,p);$('results').append(card);
+function requestExtended(pairs){
+ if(completedGoals.has(pairs)||queuedGoals.includes(pairs))return;
+ $('error').textContent='';
+ const button=$(`compute-${pairs}`);if(button)button.disabled=true;
+ const pending=$(`goal-${pairs}`)?.querySelector('.pending');if(pending)pending.textContent=worker?'Queued':'Preparing search…';
+ if(worker){queuedGoals.push(pairs);}else startSearch([pairs]);
+}
+function restoreUnfinished(){
+ queuedGoals=[];
+ for(let pairs=0;pairs<goalNames.length;pairs++){
+  const pending=$(`goal-${pairs}`)?.querySelector('.pending');if(pending)pending.textContent=pairs>=3?'Select Compute to start or retry':'Search stopped';
+  const button=$(`compute-${pairs}`);if(button)button.disabled=false;
  }
- const current=run;
+}
+function startSearch(goals){
+ const current=run;$('cancel').hidden=false;$('status').textContent='Preparing search…';
  worker=new Worker('./worker.js',{type:'module'});
  worker.onmessage=({data})=>{
   if(current!==run)return;
   if(data.type==='progress'){
-   $('status').textContent=data.phase==='tables'?`Preparing search tables (${data.table}/5)…`:`${goalNames[data.pairs]}: searching ${data.depth} moves…`;
-   const pending=$(`goal-${data.pairs}`)?.querySelector('.pending');if(pending)pending.textContent=`Searching ${data.depth} moves…`;
+   const title=data.pairs===undefined?'Search':goalNames[data.pairs];
+   const tablePhase=data.phase!=='search';
+   const message=tablePhase?`${title}: preparing ${data.phase==='tables'?'cross':data.phase==='extended-tables'?'pair':'block'} tables (${data.table}/${data.total})…`:`${title}: searching ${data.depth} moves · ${data.nodes.toLocaleString()} nodes…`;
+   $('status').textContent=message;
+   const pending=$(`goal-${data.pairs}`)?.querySelector('.pending');if(pending)pending.textContent=message;
   }
-  if(data.type==='result')result(data);
-  if(data.type==='done'){stop();$('status').textContent='Complete. Select a solution to preview it.';}
-  if(data.type==='error'){stop();$('error').textContent=data.message;$('status').textContent='Search stopped.';}
+  if(data.type==='result'){completedGoals.add(data.pairs);result(data);}
+  if(data.type==='done'){
+   stop();
+   if(queuedGoals.length)startSearch([queuedGoals.shift()]);
+   else $('status').textContent=completedGoals.size===5?'All five goals complete. Select a solution to preview it.':'Ready. 3 and 4 X-cross are computed on demand.';
+  }
+  if(data.type==='error'){stop();restoreUnfinished();$('error').textContent=data.message;$('status').textContent='Search stopped.';}
  };
- worker.onerror=()=>{stop();$('error').textContent='The solver could not start. Refresh and try again.';};
- worker.postMessage({scramble:text});
+ worker.onerror=()=>{stop();restoreUnfinished();$('error').textContent='The solver could not start. Refresh and try again.';};
+ worker.postMessage({scramble:original,goals});
 }
+function analyze(){
+ const text=$('scramble').value.trim();
+ try{if(!text)throw Error('Generate or enter a scramble first.');parse(text);}catch(e){$('error').textContent=e.message;return;}
+ stop();run++;queuedGoals=[];completedGoals.clear();$('error').textContent='';original=text;showScramble();$('results').replaceChildren();
+ for(let pairs=0;pairs<goalNames.length;pairs++){
+  const card=document.createElement('article');card.id=`goal-${pairs}`;card.className='result';
+  const h=document.createElement('h2');h.textContent=goalNames[pairs];
+  const p=document.createElement('p');p.className='pending';p.textContent=pairs>=3?'Computed on demand; proving optimality can take longer.':'Waiting';card.append(h,p);
+  if(pairs>=3){const button=document.createElement('button');button.id=`compute-${pairs}`;button.className='compute-goal';button.textContent=`Compute ${pairs} X-cross`;button.onclick=()=>requestExtended(pairs);card.append(button);}
+  $('results').append(card);
+ }
+ startSearch([0,1,2]);
+}
+
 $('generate').onclick=async()=>{
- stop();const id=++run;$('generate').disabled=true;$('error').textContent='';$('status').textContent='Generating scramble…';
+ stop();queuedGoals=[];restoreUnfinished();const id=++run;$('generate').disabled=true;$('error').textContent='';$('status').textContent='Generating scramble…';
  try{
   const {randomScrambleForEvent}=await import('https://cdn.cubing.net/v0/js/cubing/scramble');
   const scramble=await randomScrambleForEvent('333');
@@ -102,13 +130,13 @@ $('generate').onclick=async()=>{
  }finally{$('generate').disabled=false;}
 };
 $('analyze').onclick=analyze;
-$('cancel').onclick=()=>{stop();$('status').textContent='Stopped. Completed results are optimal.';document.querySelectorAll('.pending').forEach(p=>p.textContent='Search stopped');};
+$('cancel').onclick=()=>{stop();run++;restoreUnfinished();$('status').textContent='Stopped. Completed results are optimal.';};
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('scramble').value);$('status').textContent='Scramble copied.';}catch{$('error').textContent='Select and copy the scramble manually.';}};
 $('prev').onclick=()=>{if(step>0)step--;preview();};
 $('next').onclick=()=>{if(step<play.length)step++;preview();};
 $('reset').onclick=showScramble;
 $('scramble').oninput=()=>{
- stop();run++;$('results').replaceChildren();$('status').textContent='Select Solve to analyze this scramble.';
+ stop();run++;queuedGoals=[];completedGoals.clear();$('results').replaceChildren();$('status').textContent='Select Solve to analyze this scramble.';
  try{parse($('scramble').value);original=$('scramble').value;showScramble();$('error').textContent='';}catch(e){$('error').textContent=e.message;}
 };
 preview();
