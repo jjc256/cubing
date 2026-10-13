@@ -37,7 +37,7 @@ export function buildTables(progress=()=>{}){
  });
 }
 export function goal(s,pairs){if(s[0]!==8||s[1]!==10||s[2]!==12||s[3]!==14)return false;let count=0;for(let p=0;p<4;p++)if(s[p+4]===(p+8)*2&&s[p+8]===(p+4)*3)count++;return count>=pairs;}
-export function solve(initial,pairs,tables,{limit=5,progress=()=>{},maxNodes=Infinity}={}){
+export function solve(initial,pairs,tables,{limit=5,progress=()=>{},maxNodes=Infinity,solutionKey=s=>s.alg,compareSolutions=()=>0,rankAll=false}={}){
  if(![0,1,2].includes(pairs))throw Error('Invalid goal');
  const pairDistances=new Uint8Array(4);
  function heuristic(s){const cross=tables[0][index(s,subsets[0])];if(!pairs)return cross;
@@ -46,11 +46,11 @@ export function solve(initial,pairs,tables,{limit=5,progress=()=>{},maxNodes=Inf
   let best=255;if(pairs===1){for(let i=0;i<4;i++)best=Math.min(best,pairDistances[i]);}else{for(let i=0;i<4;i++)for(let j=i+1;j<4;j++)best=Math.min(best,Math.max(pairDistances[i],pairDistances[j]));}
   return Math.max(cross,best);
  }
- const stack=Array.from({length:31},()=>new Uint8Array(12));stack[0].set(initial);const path=[],solutions=[];let nodes=0,aborted=false,depth=heuristic(initial);
+ const stack=Array.from({length:31},()=>new Uint8Array(12));stack[0].set(initial);const path=[],solutions=[],solutionIndices=new Map();let nodes=0,aborted=false,depth=heuristic(initial);
  function dfs(level,left,last){
   if(++nodes>maxNodes){aborted=true;return true;}
   const s=stack[level];if(heuristic(s)>left)return false;
-  if(left===0){if(goal(s,pairs)){let solvedSlots=slots.filter((_,p)=>s[p+4]===(p+8)*2&&s[p+8]===(p+4)*3);solutions.push({alg:path.map(m=>names[m]).join(' '),slots:solvedSlots});return solutions.length>=limit;}return false;}
+  if(left===0){if(goal(s,pairs)){let solvedSlots=slots.filter((_,p)=>s[p+4]===(p+8)*2&&s[p+8]===(p+4)*3);const candidate={alg:path.map(m=>names[m]).join(' '),slots:solvedSlots};const key=solutionKey(candidate),existing=solutionIndices.get(key);if(existing===undefined){solutionIndices.set(key,solutions.length);solutions.push(candidate);}else if(compareSolutions(candidate,solutions[existing])<0){solutions[existing]=candidate;}return !rankAll&&solutions.length>=limit;}return false;}
   for(let m=0;m<18;m++){
    const face=Math.floor(m/3);if(face===last)continue;
    // Opposite faces commute: retain one order without removing any shortest result.
@@ -61,6 +61,6 @@ export function solve(initial,pairs,tables,{limit=5,progress=()=>{},maxNodes=Inf
  const started=Date.now();for(;depth<=30;depth++){
   progress({phase:'search',pairs,depth,nodes,elapsed:Date.now()-started});
   dfs(0,depth,-1);if(aborted)throw Error('Search budget exceeded; optimality has not been established.');
-  if(solutions.length)return {pairs,depth,solutions,nodes,ms:Date.now()-started};
+  if(solutions.length){solutions.sort(compareSolutions);return {pairs,depth,solutions:solutions.slice(0,limit),nodes,ms:Date.now()-started};}
  }throw Error('No solution found');
 }

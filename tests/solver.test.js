@@ -53,3 +53,43 @@ for(let sample=0;sample<16;sample++){
 }
 assert.deepEqual([...observedFronts].sort(),[...fronts].sort());
 console.log('White-top scrambling, white-bottom solutions, all four front colors, HTM, and physical replay passed.');
+
+import {rotationKey,compareSolutions,compareOrientedSolutions} from '../dist/orientation.js';
+assert.equal(rotationKey("R U F2 L'"),rotationKey("F U L2 B'"),'Yaw equivalents should have one key');
+assert.equal(rotationKey("R L2 U F"),rotationKey("L2 R U F"),'Opposite-face ordering should not create duplicates');
+assert.notEqual(rotationKey("B' R D F D' L F'"),rotationKey("R' F B D' R D L'"),'Distinct pasted algorithms must remain distinct');
+const duplicateFixture=apply("R2 L2 F2 B2");
+const raw=solve(duplicateFixture,0,tables,{limit:100});
+const unique=solve(duplicateFixture,0,tables,{limit:5,solutionKey:rotationKey,compareSolutions});
+assert.equal(unique.depth,raw.depth);
+assert.ok(unique.solutions.length<raw.solutions.length,'Fixture must include equivalent results');
+assert.equal(unique.solutions.length,new Set(raw.solutions.map(rotationKey)).size,'Deduplicate before filling the result limit');
+assert.equal(new Set(unique.solutions.map(rotationKey)).size,unique.solutions.length);
+for(let i=1;i<unique.solutions.length;i++)assert.ok(compareSolutions(unique.solutions[i-1],unique.solutions[i])<=0);
+// A duplicate class must retain the preferred representative even if found later.
+const collapsed=solve(duplicateFixture,0,tables,{limit:5,solutionKey:()=>0,compareSolutions:(a,b)=>a.alg<b.alg?-1:a.alg>b.alg?1:0});
+assert.equal(collapsed.solutions.length,1);
+assert.equal(collapsed.solutions[0].alg,raw.solutions.map(s=>s.alg).sort()[0]);
+for(let sample=0;sample<6;sample++){
+ const scramble=Array.from({length:20},()=>names[Math.floor(random()*18)]).join(' ');
+ for(let pairs=0;pairs<=2;pairs++){
+  const r=solve(apply(normalizeScramble(scramble)),pairs,tables,{limit:5,solutionKey:rotationKey,compareSolutions});
+  const display=r.solutions.map(orientSolution);
+  assert.equal(new Set(display.map(rotationKey)).size,display.length);
+  for(let i=1;i<display.length;i++)assert.ok(compareOrientedSolutions(display[i-1],display[i])<=0);
+  for(const answer of display)assert.ok(physicalGoal(scramble+' '+answer.rotation+' '+answer.alg,pairs));
+ }
+}
+console.log('Rotation deduplication, commuting turns, distinct alternatives, representative tiebreaks, and physical replay passed.');
+
+const globallyRanked=solve(duplicateFixture,0,tables,{limit:1,rankAll:true,solutionKey:rotationKey,compareSolutions});
+const allRanked=solve(duplicateFixture,0,tables,{limit:100,solutionKey:rotationKey,compareSolutions});
+assert.deepEqual(globallyRanked.solutions,[allRanked.solutions[0]],'Rank across the entire optimal depth before applying the limit');
+console.log('Global tiebreak ranking before the display limit passed.');
+const messages=[];globalThis.onmessage=null;globalThis.postMessage=m=>messages.push(m);
+await import('../dist/worker.js');
+globalThis.onmessage({data:{scramble:'R2 L2 F2 B2'}});
+const results=messages.filter(m=>m.type==='result');assert.equal(results.length,3);assert.equal(messages.at(-1).type,'done');
+for(const r of results){assert.equal(new Set(r.solutions.map(rotationKey)).size,r.solutions.length);for(let i=1;i<r.solutions.length;i++)assert.ok(compareOrientedSolutions(r.solutions[i-1],r.solutions[i])<=0);for(const s of r.solutions)assert.ok(physicalGoal('R2 L2 F2 B2 '+s.rotation+' '+s.alg,r.pairs));}
+delete globalThis.onmessage;delete globalThis.postMessage;
+console.log('Worker integration passed for all three goals.');

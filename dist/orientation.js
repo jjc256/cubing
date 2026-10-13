@@ -1,4 +1,4 @@
-import {parse,names} from './solver.js';
+import {parse} from './solver.js';
 // Scramble frame: U white, F green, R red. z2 puts white on D and keeps green on F.
 const flip={U:'D',D:'U',R:'L',L:'R',F:'F',B:'B'};
 const yaw={U:'U',D:'D',R:'F',F:'L',L:'B',B:'R'};
@@ -10,11 +10,32 @@ export function orientSolution(solution){
  for(let turn=0;turn<4;turn++){
   const tokens=alg?alg.split(' '):[];
   // All yaw frames have the same HTM length; prefer fewer B/L turns for execution.
-  const cost=tokens.reduce((n,t)=>n+(t[0]==='B'?2:t[0]==='L'?1:0),0);
-  const candidate={...solution,alg,rotation:['z2','z2 y','z2 y2',"z2 y'"][turn],front:fronts[turn],yaw:turn,slots:solution.slots.map(slot=>['FR','FL','BL','BR'][(['FR','FL','BL','BR'].indexOf(slot)+turn)%4]),cost};
-  if(!best||cost<best.cost)best=candidate;
+  const backTurns=tokens.filter(t=>t[0]==='B').length,leftTurns=tokens.filter(t=>t[0]==='L').length;
+  const cost=2*backTurns+leftTurns;
+  const candidate={...solution,alg,rotation:['z2','z2 y','z2 y2',"z2 y'"][turn],front:fronts[turn],yaw:turn,slots:solution.slots.map(slot=>['FR','FL','BL','BR'][(['FR','FL','BL','BR'].indexOf(slot)+turn)%4]),cost,backTurns,leftTurns};
+  if(!best||compareOrientedSolutions(candidate,best)<0)best=candidate;
   alg=remap(alg,yaw);
  }
+ return best;
+}
+// Stable ergonomic tiebreaks, only after the optimal HTM count has been established.
+export function compareOrientedSolutions(a,b){
+ return a.cost-b.cost||a.backTurns-b.backTurns||a.leftTurns-b.leftTurns||
+  Math.min(a.yaw,4-a.yaw)-Math.min(b.yaw,4-b.yaw)||a.yaw-b.yaw||
+  (a.alg<b.alg?-1:a.alg>b.alg?1:0);
+}
+export function compareSolutions(a,b){return compareOrientedSolutions(orientSolution(a),orientSolution(b));}
+const axis={U:0,D:0,R:1,L:1,F:2,B:2};
+function commutingKey(alg){
+ const tokens=alg?alg.split(' '):[],out=[];
+ // Adjacent opposite-face turns commute. Canonicalize each uninterrupted axis run.
+ for(let start=0;start<tokens.length;){let end=start+1;while(end<tokens.length&&axis[tokens[end][0]]===axis[tokens[start][0]])end++;
+  out.push(...tokens.slice(start,end).sort());start=end;
+ }return out.join(' ');
+}
+export function rotationKey(solution){
+ let alg=typeof solution==='string'?solution:solution.alg,best;
+ for(let turn=0;turn<4;turn++){const key=commutingKey(alg);if(best===undefined||key<best)best=key;alg=remap(alg,yaw);}
  return best;
 }
 export const normals={U:[0,1,0],R:[1,0,0],F:[0,0,1],D:[0,-1,0],L:[-1,0,0],B:[0,0,-1],x:[1,0,0],y:[0,1,0],z:[0,0,1]};
