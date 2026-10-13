@@ -1,0 +1,10 @@
+{
+  "name": "cubing-prep",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node tests/solver.test.js",
+    "start": "python3 -m http.server 5173 --directory dist",
+    "build": "npm test"
+  }
+}
