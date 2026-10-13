@@ -43,3 +43,7 @@ These explanations provide verified ways to interpret a solution, not a claim ab
 ## Larger goals
 
 Cross, 1 X-cross, and 2 X-cross run automatically. Use **Compute 3 X-cross** or **Compute 4 X-cross** for the larger searches; requests made during another search are queued. These goals retain exact HTM optimality, global ergonomic tiebreak ranking, rotation deduplication, and per-pair inspection explanations. Additional pruning tables are built only when requested. Search depth and node-count updates remain live, and **Stop** cancels pending work while retaining completed results. Large searches can take substantially longer, depending on the scramble and device; there is no production cutoff or substitution of approximate solutions.
+
+## Theme
+
+Use the header Theme control to choose System, Light, or Dark. System is the default and follows live operating-system theme changes. Manual choices are saved locally in the browser and applied before the stylesheet loads to avoid a light flash on startup. Cube sticker colors are unchanged.
