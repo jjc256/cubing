@@ -1,4 +1,4 @@
-import {flattenNotation,identityFrame,alignFrame} from './notation.js';
+import {flattenNotation,identityFrame,alignFrame,simplifyNotation} from './notation.js';
 import {apply,move,parse,solved} from './solver.js';
 import {normalizeScramble} from './orientation.js';
 export const slotNames=['FR','FL','BL','BR'];
@@ -84,7 +84,7 @@ export function presentF2L(plan){
   if(step.extraction){setup.push(alignFrame(frame,identityFrame()),step.extraction);frame=identityFrame();}
   const desired=flattenNotation(["","y'",'y2','y'][step.sourceYaw]).frame;
   setup.push(alignFrame(frame,desired),step.auf);frame=desired;
-  const setupAlg=setup.filter(Boolean).join(' '),alg=[setupAlg,step.sourceAlg].filter(Boolean).join(' ');
+  const setupAlg=setup.filter(Boolean).join(' '),alg=simplifyNotation([setupAlg,step.sourceAlg].filter(Boolean).join(' '));
   frame=flattenNotation(step.sourceAlg,frame).frame;
   steps.push({...step,fixedAlg:step.alg,before:prior,setup:setupAlg,formula:step.sourceAlg,alg});
   prior=[prior,alg].filter(Boolean).join(' ');

@@ -17,8 +17,11 @@ function render(steps){
  const card=document.createElement('details');card.className='pair-card';
  const summary=document.createElement('summary');summary.textContent=`${i+1}. ${step.slot} pair`;
  const color=document.createElement('span');color.textContent=colors[step.slot];summary.append(color);card.append(summary);
- if(step.setup){const setup=document.createElement('p');setup.className='help';setup.textContent='Setup: '+step.setup;card.append(setup);}
- const formula=document.createElement('div');formula.className='solution-alg';formula.textContent=step.formula||step.alg||(step.solvedByEarlier?'Solved by an earlier insertion.':'Already solved in this scramble.');card.append(formula);
+ const formula=document.createElement('div');formula.className='solution-alg';formula.textContent=step.alg||(step.solvedByEarlier?'Solved by an earlier insertion.':'Already solved in this scramble.');card.append(formula);
+ if(step.setup){const breakdown=document.createElement('details');breakdown.className='inspection-plan';
+ const label=document.createElement('summary');label.textContent='Setup and source algorithm';breakdown.append(label);
+ const setup=document.createElement('p');setup.className='help';setup.textContent='Setup: '+step.setup;breakdown.append(setup);
+ const original=document.createElement('p');original.className='help';original.textContent='Source: '+step.formula;breakdown.append(original);card.append(breakdown);}
  if(step.alg){const source=document.createElement('p');source.className='help';const link=document.createElement('a');link.href=step.url;link.target='_blank';link.rel='noopener';link.textContent=`${step.case} · SpeedCubeDB`;source.append(link);card.append(source);
  if(step.extraction){const note=document.createElement('p');note.className='help';note.textContent='The setup includes an extraction before aligning the source case.';card.append(note);}}
  const play=document.createElement('button');play.textContent='Preview insertion';play.onclick=()=>{selected=step;position=0;preview();};card.append(play);

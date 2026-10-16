@@ -18,3 +18,11 @@ export function alignFrame(from,to){
  for(const turn of ['y',"y'",'y2','x',"x'",'x2','z',"z'",'z2']){const next=flattenNotation(turn,current.frame).frame,id=key(next);if(!seen.has(id)){seen.add(id);queue.push({frame:next,alg:[current.alg,turn].filter(Boolean).join(' ')});}}}
  throw Error('Invalid cube orientation');
 }
+
+export function simplifyNotation(alg){
+ const stack=[],power=t=>t.endsWith('2')?2:t.endsWith("'")?3:1,base=t=>t.replace(/[2']$/,'');
+ for(const token of alg.trim().split(/\s+/).filter(Boolean)){
+  if(stack.length&&base(stack.at(-1))===base(token)){const n=(power(stack.pop())+power(token))%4;if(n)stack.push(base(token)+(n===2?'2':n===3?"'":''));}
+  else stack.push(token);
+ }return stack.join(' ');
+}
