@@ -12,22 +12,22 @@ const turns=alg=>alg.trim()?alg.trim().split(/\s+/).length:0;
 function simplify(alg){const stack=[];for(const t of alg.trim().split(/\s+/).filter(Boolean)){if(stack.length&&stack.at(-1)[0]===t[0]){const p=stack.pop(),power=x=>x.endsWith('2')?2:x.endsWith("'")?3:1,n=(power(p)+power(t))%4;if(n)stack.push(t[0]+(n===2?'2':n===3?"'":''));}else stack.push(t);}return stack.join(' ');}
 const score=alg=>turns(alg)*100+alg.split(' ').reduce((n,t)=>n+(t[0]==='B'?2:t[0]==='L'?1:0),0);
 export function buildF2LCatalog(data){
- const patterns=new Map(),seen=new Set();
+ const patterns=new Map(),seen=new Map();
  for(const entry of data.entries){
   let rotated=entry.alg;
   for(let orientation=0;orientation<4;orientation++){
    const slot=(entry.slot+orientation)%4;
    for(const auf of ['', 'U','U2',"U'"]){
-    const alg=simplify([auf,rotated].join(' ')),id=slot+':'+alg;if(seen.has(id))continue;seen.add(id);
+    const alg=simplify([auf,rotated].join(' ')),id=entry.case+':'+slot+':'+alg;const rank=entry.rank??0;if(seen.has(id)&&seen.get(id)<=rank)continue;seen.set(id,rank);
     const source=apply(inverse(alg));if(!crossSolved(source))throw Error('Catalog formula changes the cross.');
     if(solvedMask(source)&(1<<slot))continue;
     const preserved=solvedMask(apply(alg)),caseName=entry.case,collection=caseName.startsWith('AF2L')?'AdvancedF2L':'F2L';
-    const candidate={slot,alg,preserved,case:caseName,collection,url:`https://speedcubedb.com/a/3x3/${collection}/${encodeURIComponent(caseName.replaceAll(' ','_'))}`,score:score(alg)};
+    const candidate={slot,alg,preserved,rank:entry.rank??0,case:caseName,collection,url:`https://speedcubedb.com/a/3x3/${collection}/${encodeURIComponent(caseName.replaceAll(' ','_'))}`,score:score(alg)};
     const key=fingerprint(source,slot);if(!patterns.has(key))patterns.set(key,[]);patterns.get(key).push(candidate);
    }rotated=rotate(rotated);
   }
  }
- for(const list of patterns.values())list.sort((a,b)=>a.score-b.score||a.case.localeCompare(b.case));
+ for(const list of patterns.values())list.sort((a,b)=>a.rank-b.rank||a.score-b.score||a.case.localeCompare(b.case));
  return patterns;
 }
 function direct(state,slot,locked,catalog){

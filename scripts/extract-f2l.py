@@ -9,8 +9,8 @@ for collection,path in [('F2L',sys.argv[1]),('AdvancedF2L',sys.argv[2])]:
   panels=re.split(r"<div data-ori='([0-3])'[^>]*>",body)
   for j in range(1,len(panels),2):
    slot=int(panels[j])
-   for raw in re.findall(r'<div class="formatted-alg">(.*?)</div>',panels[j+1],re.S):
+   for rank,raw in enumerate(re.findall(r'<div class="formatted-alg">(.*?)</div>',panels[j+1],re.S)):
     alg=' '.join(html.unescape(re.sub('<[^>]+>','',raw)).split()).replace("2'",'2').replace('’',"'")
-    if alg and all(re.fullmatch("[URFDLBy](?:2|')?",t) for t in alg.split()):out.append({'case':name,'slot':slot,'alg':alg});kept+=1
+    if alg and all(re.fullmatch("[URFDLBurfdlbMESxyz](?:w)?(?:2|')?",t) for t in alg.split()):out.append({'case':name,'slot':slot,'alg':alg,'rank':rank});kept+=1
  print(collection,len(cases),kept,cases[-5:])
 Path(sys.argv[3]).write_text(json.dumps(out))

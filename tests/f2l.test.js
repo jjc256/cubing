@@ -60,3 +60,12 @@ for(const name of new Set(data.entries.map(e=>e.case))){
  }assert.equal(keys.size,1,`${name}: source alternatives must match the same target pair`);
 }
 console.log('All 95 cases agree on intended pair across source alternatives and viewing frames.');
+
+// Prefer the first listed variant even when a later one is shorter.
+const preferred="U R' F R F2 U F",shorter="R' F R F'";
+const ranked=buildF2LCatalog({entries:[{case:'F2L 1',slot:0,alg:preferred,rank:0},{case:'F2L 1',slot:0,alg:shorter,rank:1}]});
+const preferredPlan=solveF2L(apply(inverse(preferred)),ranked);assert.equal(preferredPlan.steps.find(s=>s.slot==='FR').alg,preferred);
+for(const list of catalog.values())for(let i=1;i<list.length;i++)assert.ok(list[i-1].rank<=list[i].rank);
+for(const name of new Set(data.entries.map(e=>e.case)))assert.ok(data.entries.some(e=>e.case===name&&e.rank===0),`${name} has its first listed algorithm`);
+assert.ok(data.entries.some(e=>e.rank===0&&/[MESurfdlb]/.test(e.sourceAlg)));
+console.log('Source ordering, first-listed coverage, and slice/wide first variants passed.');
