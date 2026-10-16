@@ -47,3 +47,11 @@ Cross, 1 X-cross, and 2 X-cross run automatically. Use **Compute 3 X-cross** or 
 ## Theme
 
 Use the header Theme control to choose System, Light, or Dark. System is the default and follows live operating-system theme changes. Manual choices are saved locally in the browser and applied before the stylesheet loads to avoid a light flash on startup. Cube sticker colors are unchanged.
+
+## F2L page
+
+The existing tool is named Cross. `f2l.html` generates a random legal state with its white cross solved, using a cubing.js random-state scramble followed by a deterministic cross-only correction. That correction depends only on cross coordinates, so each cross-state fiber maps bijectively to the solved-cross fiber, preserving the conditional uniform random-state distribution. Incidental solved pairs are retained. Scramble with white up / green front; apply z2 for white-down insertions.
+
+Four collapsed cards give a sequential F2L solution, preserving the cross and completed pairs. Cases come from [SpeedCubeDB F2L](https://speedcubedb.com/a/3x3/F2L) and [Advanced F2L](https://speedcubedb.com/a/3x3/AdvancedF2L), retrieved 2026-10-15. The local catalog covers all 41 basic and 54 advanced case labels, retaining face-turn variants and flattening source y rotations into a fixed frame. Algorithms are adapted with yaw conjugation and U adjustments, and verified against the actual state. When necessary an explicit extraction setup precedes the referenced case. These insertions do not claim optimal full-F2L length.
+
+`tests/f2l.test.js` checks 300 deterministic scramble samples, cross preservation after every insertion, completed-pair preservation, independent sticker replay of white-top scrambles and complete white-bottom F2L, coverage of all 95 source case labels, extraction fallback, and the browser worker entry.

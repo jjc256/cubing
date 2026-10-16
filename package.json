@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/solver.test.js",
+    "test": "node tests/solver.test.js && node tests/f2l.test.js",
     "start": "python3 -m http.server 5173 --directory dist",
     "build": "npm test"
   }
