@@ -56,22 +56,57 @@ function withExtraction(state,target,locked,catalog){
  }
  return search(state,'',3);
 }
+const positions={
+ edge:[[1,1,0],[0,1,1],[-1,1,0],[0,1,-1],[1,-1,0],[0,-1,1],[-1,-1,0],[0,-1,-1],[1,0,1],[-1,0,1],[-1,0,-1],[1,0,-1]],
+ corner:[[1,1,1],[-1,1,1],[-1,1,-1],[1,1,-1],[1,-1,1],[-1,-1,1],[-1,-1,-1],[1,-1,-1]]
+};
+const axes={U:[0,1,0],D:[0,-1,0],R:[1,0,0],L:[-1,0,0],F:[0,0,1],B:[0,0,-1]};
+const dot=(a,b)=>a.reduce((sum,v,i)=>sum+v*b[i],0);
+export function pairVisibility(state,slot,frame=identityFrame()){
+ const local=p=>[dot(p,axes[frame.R]),dot(p,axes[frame.U]),dot(p,axes[frame.F])];
+ const corner=local(positions.corner[Math.floor(state[8+slot]/3)]),edge=local(positions.edge[Math.floor(state[4+slot]/2)]);
+ // Rear pieces in U remain visible from above; buried rear pieces need a peek.
+ const cornerBuried=corner[1]<0,edgeBuried=edge[1]<=0;
+ const cornerHidden=cornerBuried&&corner[2]<0,edgeHidden=edgeBuried&&edge[2]<0;
+ return {corner,edge,cornerHidden,edgeHidden,cost:40*cornerHidden+20*edgeHidden+5*cornerBuried+2*edgeBuried};
+}
+function executionFor(step,initialFrame){
+ let frame=initialFrame;const setup=[];
+ if(step.extraction){setup.push(alignFrame(frame,identityFrame()),step.extraction);frame=identityFrame();}
+ const desired=flattenNotation(["","y'",'y2','y'][step.sourceYaw]).frame;
+ setup.push(alignFrame(frame,desired),step.auf);
+ const setupAlg=setup.filter(Boolean).join(' '),alg=simplifyNotation([setupAlg,step.sourceAlg].filter(Boolean).join(' '));
+ return {setup:setupAlg,alg,frame:flattenNotation(step.sourceAlg,desired).frame};
+}
 export function solveF2L(initial,catalog){
  if(!crossSolved(initial))throw Error('The white cross must be solved before F2L.');
- let state=initial,prior='';const steps=[],recorded=new Set();
- while(recorded.size<4){
-  const locked=solvedMask(state);
-  for(let p=0;p<4;p++)if((locked&(1<<p))&&!recorded.has(p)){steps.push({slot:slotNames[p],alg:'',before:prior,alreadySolved:true,solvedByEarlier:!!prior});recorded.add(p);}
-  if(recorded.size===4)break;
-  let best;
-  for(let p=0;p<4;p++)if(!recorded.has(p)){const answer=direct(state,p,locked,catalog);if(answer&&(!best||answer.score<best.score))best=answer;}
-  if(!best)for(let p=0;p<4&&!best;p++)if(!recorded.has(p))best=withExtraction(state,p,locked,catalog);
-  if(!best)throw Error('No cross-preserving insertion was found. Generate another state.');
-  const verified=execute(state,best.alg);if(!crossSolved(verified)||(solvedMask(verified)&locked)!==locked||!(solvedMask(verified)&(1<<best.slot)))throw Error('Insertion verification failed.');
-  steps.push({slot:slotNames[best.slot],alg:best.alg,before:prior,case:best.case,collection:best.collection,url:best.url,sourceAlg:best.sourceAlg,sourceYaw:best.sourceYaw,auf:best.auf,extraction:best.extraction||''});recorded.add(best.slot);
-  prior=[prior,best.alg].filter(Boolean).join(' ');state=verified;
+ const memo=new Map();
+ function search(state,frame){
+  const locked=solvedMask(state);if(locked===15)return {path:[],visibility:0,rotations:0,moves:0};
+  const key=state.join(',')+':'+Object.values(frame).join('');if(memo.has(key))return memo.get(key);
+  let best=null;
+  for(let p=0;p<4;p++)if(!(locked&(1<<p))){
+   const answer=direct(state,p,locked,catalog)||withExtraction(state,p,locked,catalog);if(!answer)continue;
+   const after=answer.after&& !answer.extraction?answer.after:execute(state,answer.alg);
+   const execution=executionFor(answer,frame),future=search(after,execution.frame);if(!future)continue;
+   const recognition=pairVisibility(state,p,frame);
+   const candidate={path:[{...answer,recognition},...future.path],visibility:recognition.cost+.5*future.visibility,
+    rotations:execution.alg.split(' ').filter(t=>/^[xyz]/.test(t)).length+future.rotations,moves:turns(execution.alg)+future.moves};
+   if(!best||candidate.visibility<best.visibility||candidate.visibility===best.visibility&&(candidate.rotations<best.rotations||candidate.rotations===best.rotations&&candidate.moves<best.moves))best=candidate;
+  }
+  memo.set(key,best);return best;
  }
- return {steps,alg:prior};
+ const plan=search(initial,identityFrame());if(!plan)throw Error('No cross-preserving F2L plan was found.');
+ let state=initial,prior='';const steps=[],recorded=new Set();
+ function recordSolved(){const locked=solvedMask(state);for(let p=0;p<4;p++)if((locked&(1<<p))&&!recorded.has(p)){steps.push({slot:slotNames[p],alg:'',before:prior,alreadySolved:true,solvedByEarlier:!!prior});recorded.add(p);}}
+ recordSolved();
+ for(const best of plan.path){
+  const locked=solvedMask(state),verified=execute(state,best.alg);
+  if(!crossSolved(verified)||(solvedMask(verified)&locked)!==locked||!(solvedMask(verified)&(1<<best.slot)))throw Error('Insertion verification failed.');
+  steps.push({slot:slotNames[best.slot],alg:best.alg,before:prior,case:best.case,collection:best.collection,url:best.url,sourceAlg:best.sourceAlg,sourceYaw:best.sourceYaw,auf:best.auf,extraction:best.extraction||'',recognition:best.recognition});recorded.add(best.slot);
+  prior=[prior,best.alg].filter(Boolean).join(' ');state=verified;recordSolved();
+ }
+ return {steps,alg:prior,lookaheadCost:plan.visibility};
 }
 export function crossSolvedScramble(raw,correction){return simplify([raw,normalizeScramble(correction)].filter(Boolean).join(' '));}
 
@@ -80,12 +115,8 @@ export function presentF2L(plan){
  let frame=identityFrame(),prior='';const steps=[];
  for(const step of plan.steps){
   if(!step.alg){steps.push({...step,before:prior});continue;}
-  const setup=[];
-  if(step.extraction){setup.push(alignFrame(frame,identityFrame()),step.extraction);frame=identityFrame();}
-  const desired=flattenNotation(["","y'",'y2','y'][step.sourceYaw]).frame;
-  setup.push(alignFrame(frame,desired),step.auf);frame=desired;
-  const setupAlg=setup.filter(Boolean).join(' '),alg=simplifyNotation([setupAlg,step.sourceAlg].filter(Boolean).join(' '));
-  frame=flattenNotation(step.sourceAlg,frame).frame;
+  const execution=executionFor(step,frame),setupAlg=execution.setup,alg=execution.alg;
+  frame=execution.frame;
   steps.push({...step,fixedAlg:step.alg,before:prior,setup:setupAlg,formula:step.sourceAlg,alg});
   prior=[prior,alg].filter(Boolean).join(' ');
  }return {steps,alg:prior};

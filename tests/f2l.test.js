@@ -2,7 +2,7 @@ import {flattenNotation,alignFrame,identityFrame} from '../dist/notation.js';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {buildTables,solve,apply,names,move} from '../dist/solver.js';
-import {buildF2LCatalog,solveF2L,execute,solvedMask,crossSolved,crossSolvedScramble,inverse,presentF2L} from '../dist/f2l.js';
+import {buildF2LCatalog,solveF2L,execute,solvedMask,crossSolved,crossSolvedScramble,inverse,presentF2L,pairVisibility} from '../dist/f2l.js';
 import {normalizeScramble,stickersFor} from '../dist/orientation.js';
 const catalog=buildF2LCatalog(JSON.parse(fs.readFileSync(new URL('../dist/f2l-cases.json',import.meta.url))));console.log('patterns',catalog.size,'per slot',[0,1,2,3].map(i=>[...catalog.keys()].filter(k=>k.startsWith(i+':')).length));
 const tables=buildTables();let seed=42;const rand=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/2**32;};let advanced=0,extracted=0;
@@ -80,3 +80,31 @@ const ergonomicScramble="L2 U' L F B R F2 D F D2 R2 U2 F2 U2 B' R2 B2 D2 B D2 U 
 const ergonomicPlan=presentF2L(solveF2L(apply(normalizeScramble(ergonomicScramble)),catalog));
 assert.equal(ergonomicPlan.steps[0].case,'F2L 13');assert.equal(ergonomicPlan.steps[0].formula,"d L' U L U' L' U' L");assert.equal(ergonomicPlan.steps[0].setup,'U2');
 console.log('Original ergonomic formulas, grip changes, slice/wide playback, and sequential reorientation passed.');
+
+// Buried back corners are harder to recognize than back edges; top-back
+// pieces remain visible from above. Measure relative to the actual grip.
+const hidden=apply('');hidden[8]=18;hidden[4]=20;
+assert.equal(pairVisibility(hidden,0).cost,67);
+assert.equal(pairVisibility(hidden,0,flattenNotation('y2').frame).cost,7);
+hidden[8]=6;hidden[4]=6;assert.equal(pairVisibility(hidden,0).cost,0);
+const visibilityFixtures=[
+ ["U D L2 B2 D2 F R F B' F2 D2 U2 R2 D F2 R F2 U L2 B' R' F'",'BL'],
+ ["L2 D2 B' D2 B2 D2 F D2 B L' R F L' F' R' U2 L' F' B2 R'",'BR']
+];
+for(const [scramble,expected] of visibilityFixtures){const state=apply(normalizeScramble(scramble)),answer=solveF2L(state,catalog),first=answer.steps.find(s=>s.alg);assert.equal(first.slot,expected);assert.equal(first.recognition.cost,0);}
+// Independent exhaustive enumeration verifies real lookahead, not simply
+// greedy current visibility. Every branch in this fixture has a direct case.
+const lookaheadState=apply(normalizeScramble("L' D2 F' L' F' L' B L U' F' D L2 U' D2 R' D B' F' R' U R U F L2 B"));
+function enumerateOrders(state,path=[]){
+ const locked=solvedMask(state);if(locked===15)return [{path,cost:0}];
+ const frame=flattenNotation(presentF2L({steps:path}).alg).frame,out=[];
+ for(let p=0;p<4;p++)if(!(locked&(1<<p))){
+  const entry=(catalog.get(`${p}:${state[p+4]}:${state[p+8]}`)||[]).find(e=>(e.preserved&locked)===locked);assert.ok(entry,'fixture requires direct insertion for every branch');
+  for(const child of enumerateOrders(execute(state,entry.alg),[...path,entry]))out.push({path:child.path,cost:pairVisibility(state,p,frame).cost+.5*child.cost});
+ }return out;
+}
+const orders=enumerateOrders(lookaheadState),lookaheadPlan=solveF2L(lookaheadState,catalog);
+assert.equal(lookaheadPlan.lookaheadCost,Math.min(...orders.map(o=>o.cost)));
+const visibleRoots=new Set(orders.filter(o=>pairVisibility(lookaheadState,o.path[0].slot).cost===0).map(o=>o.path[0].slot));assert.ok(visibleRoots.size>1);
+const rootCosts=[...visibleRoots].map(p=>Math.min(...orders.filter(o=>o.path[0].slot===p).map(o=>o.cost)));assert.ok(Math.max(...rootCosts)>Math.min(...rootCosts));
+console.log('Back-piece visibility, current-grip orientation, easier-pair priority and exhaustive full-order lookahead passed.');
