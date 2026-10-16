@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-import {buildTables,solve,apply,names} from '../dist/solver.js';
-import {buildF2LCatalog,solveF2L,execute,solvedMask,crossSolved,crossSolvedScramble} from '../dist/f2l.js';
+import {buildTables,solve,apply,names,move} from '../dist/solver.js';
+import {buildF2LCatalog,solveF2L,execute,solvedMask,crossSolved,crossSolvedScramble,inverse} from '../dist/f2l.js';
 import {normalizeScramble,stickersFor} from '../dist/orientation.js';
 const catalog=buildF2LCatalog(JSON.parse(fs.readFileSync(new URL('../dist/f2l-cases.json',import.meta.url))));console.log('patterns',catalog.size,'per slot',[0,1,2,3].map(i=>[...catalog.keys()].filter(k=>k.startsWith(i+':')).length));
 const tables=buildTables();let seed=42;const rand=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/2**32;};let advanced=0,extracted=0;
@@ -28,3 +28,35 @@ for(const list of catalog.values())for(const entry of list){assert.ok(!entry.url
 const physical=stickersFor(result.scramble),centers=physical.filter(s=>s.p.filter(v=>v!==0).length===1);
 for(const sticker of physical.filter(s=>s.p[1]===1&&Math.abs(s.p[0])+Math.abs(s.p[2])===1)){const center=centers.find(c=>c.n.every((v,i)=>v===sticker.n[i]));assert.equal(sticker.color,center.color);}
 console.log('Source slot mapping, underscore links and full cross sticker alignment passed.');
+
+// AF2L tabs are viewing frames. AF2L 25 targets BR in its default
+// frame, not FR. Its pair is trapped in the neighboring F2L slot.
+for(const entry of data.entries.filter(e=>e.case==='AF2L 25')){
+ const source=apply(inverse(entry.alg)),p=entry.slot;
+ assert.equal(p,(3+entry.sourceOrientation)%4);
+ assert.equal(source[4+p],17+2*((p+1)%4));
+ assert.equal(source[8+p],12+3*((p+1)%4));
+}
+// User-reported scramble: the old map manufactured an AF2L 25
+// green/orange match after unnecessary extractions.
+const reported="L B' R' F D B D2 R' U R2 F R2 U2 B' D2 B' R2 F2 R2 U2 L2 D L R2 F L' B R'";
+const start=apply(normalizeScramble(reported)),plan=solveF2L(start,catalog);
+assert.ok(crossSolved(start));assert.equal(plan.steps[0].slot,'FR');assert.equal(plan.steps[0].case,'AF2L 6a');assert.equal(plan.steps[0].extraction,'');
+assert.notEqual(plan.steps.find(s=>s.slot==='FR').case,'AF2L 25');
+for(const step of plan.steps){const before=execute(start,step.before),after=execute(before,step.alg);assert.ok(crossSolved(after));assert.equal(solvedMask(after)&solvedMask(before),solvedMask(before));}
+const replay=stickersFor(reported+' z2 '+plan.alg),faceCenters=replay.filter(s=>s.p.filter(v=>v!==0).length===1);
+for(const sticker of replay.filter(s=>s.p[1]<=0)){const center=faceCenters.find(c=>c.n.every((v,i)=>v===sticker.n[i]));assert.equal(sticker.color,center.color);}
+console.log('AF2L 25 intended target and reported-scramble physical replay passed.');
+
+// All source alternatives for a case must describe the same intended
+// pair state, after undoing the tab's viewing frame and allowing AUF.
+const yaw={U:'U',D:'D',R:'F',F:'L',L:'B',B:'R'};
+const rotate=a=>a.split(' ').map(t=>yaw[t[0]]+t.slice(1)).join(' ');
+const orbit=(state,p)=>{const keys=[];for(let i=0;i<4;i++){keys.push(`${state[p+4]}:${state[p+8]}`);state=move(state,0);}return keys.sort()[0];};
+for(const name of new Set(data.entries.map(e=>e.case))){
+ const keys=new Set();for(const entry of data.entries.filter(e=>e.case===name)){
+  let alg=entry.alg,p=entry.slot;for(let i=0;i<(4-entry.sourceOrientation)%4;i++){alg=rotate(alg);p=(p+1)%4;}
+  keys.add(orbit(apply(inverse(alg)),p));
+ }assert.equal(keys.size,1,`${name}: source alternatives must match the same target pair`);
+}
+console.log('All 95 cases agree on intended pair across source alternatives and viewing frames.');
