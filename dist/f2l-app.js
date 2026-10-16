@@ -1,10 +1,12 @@
-import {drawCube} from './orientation.js';
+import {drawCube,stickersFor} from './orientation.js';
 const $=id=>document.getElementById(id),colors={FR:'Green / orange',FL:'Green / red',BL:'Blue / red',BR:'Blue / orange'};
 let worker,scramble='',selected=null,position=0,ticket=0;
 function preview(){
  const moves=selected?.alg.split(/\s+/).filter(Boolean)||[];
- drawCube($('cube'),scramble+(selected?' z2 '+selected.before+' '+moves.slice(0,position).join(' '):''));
- $('orientation-label').textContent=selected?'White bottom · Green front':'White top · Green front';
+ const display=scramble+(selected?' z2 '+selected.before+' '+moves.slice(0,position).join(' '):'');
+ drawCube($('cube'),display);
+ const stickers=stickersFor(display),names={U:'White',D:'Yellow',F:'Green',B:'Blue',R:'Red',L:'Orange'},center=n=>names[stickers.find(s=>s.p.every((v,i)=>v===n[i])&&s.n.every((v,i)=>v===n[i])).color];
+ $('orientation-label').textContent=selected?`${center([0,-1,0])} bottom · ${center([0,0,1])} front`:'White top · Green front';
  $('preview-rotation').textContent=selected?'z2 · Previous insertions applied':'';
  $('step-label').textContent=selected?`${selected.slot} · ${position} / ${moves.length}${position?' · '+moves[position-1]:''}`:'Scramble';
  $('prev').disabled=!selected||position===0;$('next').disabled=!selected||position===moves.length;
@@ -15,9 +17,10 @@ function render(steps){
  const card=document.createElement('details');card.className='pair-card';
  const summary=document.createElement('summary');summary.textContent=`${i+1}. ${step.slot} pair`;
  const color=document.createElement('span');color.textContent=colors[step.slot];summary.append(color);card.append(summary);
- const formula=document.createElement('div');formula.className='solution-alg';formula.textContent=step.alg||(step.solvedByEarlier?'Solved by an earlier insertion.':'Already solved in this scramble.');card.append(formula);
+ if(step.setup){const setup=document.createElement('p');setup.className='help';setup.textContent='Setup: '+step.setup;card.append(setup);}
+ const formula=document.createElement('div');formula.className='solution-alg';formula.textContent=step.formula||step.alg||(step.solvedByEarlier?'Solved by an earlier insertion.':'Already solved in this scramble.');card.append(formula);
  if(step.alg){const source=document.createElement('p');source.className='help';const link=document.createElement('a');link.href=step.url;link.target='_blank';link.rel='noopener';link.textContent=`${step.case} · SpeedCubeDB`;source.append(link);card.append(source);
- if(step.extraction){const note=document.createElement('p');note.className='help';note.textContent=`First extract the pieces with ${step.extraction}, then apply the referenced case (with any U adjustment).`;card.append(note);}}
+ if(step.extraction){const note=document.createElement('p');note.className='help';note.textContent='The setup includes an extraction before aligning the source case.';card.append(note);}}
  const play=document.createElement('button');play.textContent='Preview insertion';play.onclick=()=>{selected=step;position=0;preview();};card.append(play);
  card.addEventListener('toggle',()=>{if(card.open){selected=step;position=0;preview();}});$('results').append(card);
  });

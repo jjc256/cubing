@@ -48,8 +48,8 @@ export function stickersFor(alg){
   const n=normals[f],p=[...n],axes=[0,1,2].filter(i=>n[i]===0);p[axes[0]]=a;p[axes[1]]=b;stickers.push({p,n:[...n],color:f});
  }
  for(const tok of alg.trim().split(/\s+/).filter(Boolean)){
-  const axis=normals[tok[0]];if(!axis)throw Error('Invalid display move');const whole='xyz'.includes(tok[0]),turns=tok.endsWith('2')?2:tok.endsWith("'")?3:1;
-  for(let t=0;t<turns;t++)for(const s of stickers)if(whole||dot(s.p,axis)===1)for(const key of ['p','n']){const v=s[key],c=cross(axis,v),d=dot(axis,v);s[key]=axis.map((n,i)=>n*d-c[i]);}
+  const base=tok[0],slice={M:'L',E:'D',S:'F'}[base],wide=/^[urfdlb]/.test(tok)||tok.includes('w'),axis=normals[slice||base.toUpperCase()]||normals[base];if(!axis)throw Error('Invalid display move');const whole='xyz'.includes(base),turns=tok.endsWith('2')?2:tok.endsWith("'")?3:1;
+  for(let t=0;t<turns;t++)for(const s of stickers)if(whole||(slice?dot(s.p,axis)===0:wide?dot(s.p,axis)>=0:dot(s.p,axis)===1))for(const key of ['p','n']){const v=s[key],c=cross(axis,v),d=dot(axis,v);s[key]=axis.map((n,i)=>n*d-c[i]);}
  }
  return stickers;
 }

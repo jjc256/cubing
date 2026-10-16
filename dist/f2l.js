@@ -1,3 +1,4 @@
+import {flattenNotation,identityFrame,alignFrame} from './notation.js';
 import {apply,move,parse,solved} from './solver.js';
 import {normalizeScramble} from './orientation.js';
 export const slotNames=['FR','FL','BL','BR'];
@@ -18,16 +19,16 @@ export function buildF2LCatalog(data){
   for(let orientation=0;orientation<4;orientation++){
    const slot=(entry.slot+orientation)%4;
    for(const auf of ['', 'U','U2',"U'"]){
-    const alg=simplify([auf,rotated].join(' ')),id=entry.case+':'+slot+':'+alg;const rank=entry.rank??0;if(seen.has(id)&&seen.get(id)<=rank)continue;seen.set(id,rank);
+    const alg=simplify([auf,rotated].join(' ')),id=entry.case+':'+slot+':'+alg+':'+orientation;const rank=entry.rank??0;if(seen.has(id)&&seen.get(id)<=rank)continue;seen.set(id,rank);
     const source=apply(inverse(alg));if(!crossSolved(source))throw Error('Catalog formula changes the cross.');
     if(solvedMask(source)&(1<<slot))continue;
     const preserved=solvedMask(apply(alg)),caseName=entry.case,collection=caseName.startsWith('AF2L')?'AdvancedF2L':'F2L';
-    const candidate={slot,alg,preserved,rank:entry.rank??0,case:caseName,collection,url:`https://speedcubedb.com/a/3x3/${collection}/${encodeURIComponent(caseName.replaceAll(' ','_'))}`,score:score(alg)};
+    const candidate={slot,alg,preserved,sourceAlg:entry.sourceAlg||entry.alg,sourceYaw:orientation,auf,rank:entry.rank??0,case:caseName,collection,url:`https://speedcubedb.com/a/3x3/${collection}/${encodeURIComponent(caseName.replaceAll(' ','_'))}`,score:score(alg)};
     const key=fingerprint(source,slot);if(!patterns.has(key))patterns.set(key,[]);patterns.get(key).push(candidate);
    }rotated=rotate(rotated);
   }
  }
- for(const list of patterns.values())list.sort((a,b)=>a.rank-b.rank||a.score-b.score||a.case.localeCompare(b.case));
+ for(const list of patterns.values())list.sort((a,b)=>a.rank-b.rank||Math.min(a.sourceYaw,4-a.sourceYaw)-Math.min(b.sourceYaw,4-b.sourceYaw)||a.score-b.score||a.case.localeCompare(b.case));
  return patterns;
 }
 function direct(state,slot,locked,catalog){
@@ -67,9 +68,25 @@ export function solveF2L(initial,catalog){
   if(!best)for(let p=0;p<4&&!best;p++)if(!recorded.has(p))best=withExtraction(state,p,locked,catalog);
   if(!best)throw Error('No cross-preserving insertion was found. Generate another state.');
   const verified=execute(state,best.alg);if(!crossSolved(verified)||(solvedMask(verified)&locked)!==locked||!(solvedMask(verified)&(1<<best.slot)))throw Error('Insertion verification failed.');
-  steps.push({slot:slotNames[best.slot],alg:best.alg,before:prior,case:best.case,collection:best.collection,url:best.url,extraction:best.extraction||''});recorded.add(best.slot);
+  steps.push({slot:slotNames[best.slot],alg:best.alg,before:prior,case:best.case,collection:best.collection,url:best.url,sourceAlg:best.sourceAlg,sourceYaw:best.sourceYaw,auf:best.auf,extraction:best.extraction||''});recorded.add(best.slot);
   prior=[prior,best.alg].filter(Boolean).join(' ');state=verified;
  }
  return {steps,alg:prior};
 }
 export function crossSolvedScramble(raw,correction){return simplify([raw,normalizeScramble(correction)].filter(Boolean).join(' '));}
+
+// Keep the source execution intact; only the setup changes with the current grip.
+export function presentF2L(plan){
+ let frame=identityFrame(),prior='';const steps=[];
+ for(const step of plan.steps){
+  if(!step.alg){steps.push({...step,before:prior});continue;}
+  const setup=[];
+  if(step.extraction){setup.push(alignFrame(frame,identityFrame()),step.extraction);frame=identityFrame();}
+  const desired=flattenNotation(["","y'",'y2','y'][step.sourceYaw]).frame;
+  setup.push(alignFrame(frame,desired),step.auf);frame=desired;
+  const setupAlg=setup.filter(Boolean).join(' '),alg=[setupAlg,step.sourceAlg].filter(Boolean).join(' ');
+  frame=flattenNotation(step.sourceAlg,frame).frame;
+  steps.push({...step,fixedAlg:step.alg,before:prior,setup:setupAlg,formula:step.sourceAlg,alg});
+  prior=[prior,alg].filter(Boolean).join(' ');
+ }return {steps,alg:prior};
+}
