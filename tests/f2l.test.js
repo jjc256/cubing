@@ -19,3 +19,12 @@ assert.ok(advanced>0);assert.ok(extracted>0);
 const data=JSON.parse(fs.readFileSync(new URL('../dist/f2l-cases.json',import.meta.url)));assert.equal(new Set(data.entries.map(e=>e.case)).size,95);for(const e of data.entries)assert.ok(crossSolved(apply(e.alg)));
 const messages=[];globalThis.self=globalThis;globalThis.postMessage=m=>messages.push(m);globalThis.fetch=async()=>({ok:true,json:async()=>data});
 await import('../dist/f2l-worker.js');await self.onmessage({data:{rawScramble:"R U F2 B' D L2 U2 R'"}});const result=messages.find(m=>m.type==='result');assert.ok(result,JSON.stringify(messages));assert.equal(solvedMask(execute(apply(normalizeScramble(result.scramble)),result.steps.map(s=>s.alg).join(' '))),15);console.log('F2L worker integration passed.');
+
+// Regression: source tabs must retain their target slots, not all become FR.
+assert.deepEqual([...new Set(data.entries.map(e=>e.slot))].sort(),[0,1,2,3]);
+for(const [slot,alg] of [[0,"U R U' R'"],[1,"U F U' F'"],[2,"U L U' L'"],[3,"U B U' B'"]])assert.ok(data.entries.some(e=>e.case==='F2L 1'&&e.slot===slot&&e.alg===alg));
+for(const list of catalog.values())for(const entry of list){assert.ok(!entry.url.includes('%20'));assert.ok(entry.url.includes(entry.case.replaceAll(' ','_')));}
+// Check side alignment too: white stickers alone do not prove a solved cross.
+const physical=stickersFor(result.scramble),centers=physical.filter(s=>s.p.filter(v=>v!==0).length===1);
+for(const sticker of physical.filter(s=>s.p[1]===1&&Math.abs(s.p[0])+Math.abs(s.p[2])===1)){const center=centers.find(c=>c.n.every((v,i)=>v===sticker.n[i]));assert.equal(sticker.color,center.color);}
+console.log('Source slot mapping, underscore links and full cross sticker alignment passed.');

@@ -22,7 +22,7 @@ export function buildF2LCatalog(data){
     const source=apply(inverse(alg));if(!crossSolved(source))throw Error('Catalog formula changes the cross.');
     if(solvedMask(source)&(1<<slot))continue;
     const preserved=solvedMask(apply(alg)),caseName=entry.case,collection=caseName.startsWith('AF2L')?'AdvancedF2L':'F2L';
-    const candidate={slot,alg,preserved,case:caseName,collection,url:`https://speedcubedb.com/a/3x3/${collection}/${encodeURIComponent(caseName)}`,score:score(alg)};
+    const candidate={slot,alg,preserved,case:caseName,collection,url:`https://speedcubedb.com/a/3x3/${collection}/${encodeURIComponent(caseName.replaceAll(' ','_'))}`,score:score(alg)};
     const key=fingerprint(source,slot);if(!patterns.has(key))patterns.set(key,[]);patterns.get(key).push(candidate);
    }rotated=rotate(rotated);
   }
