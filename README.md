@@ -71,3 +71,5 @@ The planner enumerates complete remaining pair orders, retaining each case's pre
 ## Random first F2L pair
 
 The F2L page chooses its first insertion uniformly among unsolved pairs with a valid complete continuation, regardless of visibility. Already-solved pairs are excluded. After that choice, the remaining insertions retain visibility-based lookahead in the current grip. Source algorithm preferences, cross preservation, and original ergonomic notation remain unchanged.
+
+F2L also draws its starting yaw uniformly from four front colors, with white remaining on the bottom. The scramble itself retains white-top/green-front notation. An explicit z2 plus optional y setup appears before solving. The state is transformed into that chosen solving frame before planning, so the orientation is substantive rather than an extra rotation immediately undone by the first insertion. Pair slot labels, color labels, lookahead, and playback all use the selected frame.

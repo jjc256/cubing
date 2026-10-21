@@ -2,7 +2,7 @@ import {flattenNotation,alignFrame,identityFrame} from '../dist/notation.js';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {buildTables,solve,apply,names,move} from '../dist/solver.js';
-import {buildF2LCatalog,solveF2L,execute,solvedMask,crossSolved,crossSolvedScramble,inverse,presentF2L,pairVisibility} from '../dist/f2l.js';
+import {buildF2LCatalog,solveF2L,execute,solvedMask,crossSolved,crossSolvedScramble,inverse,presentF2L,pairVisibility,f2lOrientation} from '../dist/f2l.js';
 import {normalizeScramble,stickersFor} from '../dist/orientation.js';
 const catalog=buildF2LCatalog(JSON.parse(fs.readFileSync(new URL('../dist/f2l-cases.json',import.meta.url))));console.log('patterns',catalog.size,'per slot',[0,1,2,3].map(i=>[...catalog.keys()].filter(k=>k.startsWith(i+':')).length));
 const tables=buildTables();let seed=42;const rand=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/2**32;};let advanced=0,extracted=0;
@@ -24,7 +24,7 @@ console.log('300 random corrected states solved',advanced,'advanced algorithms',
 assert.ok(advanced>0);assert.ok(extracted>0);
 const data=JSON.parse(fs.readFileSync(new URL('../dist/f2l-cases.json',import.meta.url)));assert.equal(new Set(data.entries.map(e=>e.case)).size,95);for(const e of data.entries)assert.ok(crossSolved(apply(e.alg)));
 const messages=[];globalThis.self=globalThis;globalThis.postMessage=m=>messages.push(m);globalThis.fetch=async()=>({ok:true,json:async()=>data});
-await import('../dist/f2l-worker.js');await self.onmessage({data:{rawScramble:"R U F2 B' D L2 U2 R'"}});const result=messages.find(m=>m.type==='result');assert.ok(result,JSON.stringify(messages));assert.equal(solvedMask(execute(apply(normalizeScramble(result.scramble)),flattenNotation(result.steps.map(s=>s.alg).join(' ')).alg)),15);console.log('F2L worker integration passed.');
+await import('../dist/f2l-worker.js');await self.onmessage({data:{rawScramble:"R U F2 B' D L2 U2 R'"}});const result=messages.find(m=>m.type==='result');assert.ok(result,JSON.stringify(messages));assert.equal(solvedMask(execute(f2lOrientation(result.scramble,result.yaw).state,flattenNotation(result.steps.map(s=>s.alg).join(' ')).alg)),15);console.log('F2L worker integration passed.');
 
 // Regression: source tabs must retain their target slots, not all become FR.
 assert.deepEqual([...new Set(data.entries.map(e=>e.slot))].sort(),[0,1,2,3]);
@@ -126,3 +126,16 @@ assert.equal(solveF2L(apply(''),catalog,{randomFirst:true,random:()=>{draws++;re
 const onePair=apply(inverse("U R U' R'"));
 assert.equal(solveF2L(onePair,catalog,{randomFirst:true,random:()=>.999}).steps.find(s=>s.alg).slot,'FR');
 console.log('Uniform first-pair choice, solved-pair exclusion, complete replay, and remaining-pair lookahead passed.');
+
+// Each starting yaw gets its own local solving frame; the source algorithm
+// does not undo a cosmetic rotation. Replay real stickers in all four frames.
+for(let yaw=0;yaw<4;yaw++){
+ const oriented=f2lOrientation(reported,yaw),plan=presentF2L(solveF2L(oriented.state,catalog,{randomFirst:true,random:()=>.5}));
+ assert.ok(crossSolved(oriented.state));assert.equal(solvedMask(execute(oriented.state,flattenNotation(plan.alg).alg)),15);
+ const endFrame=flattenNotation(plan.alg).frame,ss=stickersFor(reported+' '+oriented.rotation+' '+plan.alg+' '+alignFrame(endFrame,identityFrame())),centers=ss.filter(s=>s.p.filter(v=>v!==0).length===1);
+ for(const sticker of ss.filter(s=>s.p[1]<=0)){const center=centers.find(c=>c.n.every((v,i)=>v===sticker.n[i]));assert.equal(sticker.color,center.color);}
+ const start=stickersFor(reported+' '+oriented.rotation),names={U:'White',D:'Yellow',F:'Green',B:'Blue',R:'Red',L:'Orange'};
+ const front=start.find(s=>s.p.join(',')==='0,0,1'&&s.n.join(',')==='0,0,1');assert.equal(names[front.color],oriented.front);
+ const right=start.find(s=>s.p.join(',')==='1,0,0'&&s.n.join(',')==='1,0,0');assert.deepEqual(oriented.pairColors.FR.toLowerCase().split(' / ').sort(),[names[front.color],names[right.color]].map(s=>s.toLowerCase()).sort());
+}
+console.log('All four starting fronts, physical F2L replay, and orientation-dependent pair colors passed.');

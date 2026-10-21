@@ -123,3 +123,11 @@ export function presentF2L(plan){
   prior=[prior,alg].filter(Boolean).join(' ');
  }return {steps,alg:prior};
 }
+
+export function f2lOrientation(scramble,yaw){
+ if(!Number.isInteger(yaw)||yaw<0||yaw>3)throw Error('Invalid F2L orientation');
+ let alg=normalizeScramble(scramble);for(let i=0;i<yaw;i++)alg=rotate(alg);
+ const colors=['Green / orange','Green / red','Blue / red','Blue / orange'];
+ return {state:apply(alg),rotation:['z2','z2 y','z2 y2',"z2 y'"][yaw],front:['Green','Orange','Blue','Red'][yaw],
+  pairColors:Object.fromEntries(slotNames.map((slot,p)=>[slot,colors[(p-yaw+4)%4]]))};
+}
