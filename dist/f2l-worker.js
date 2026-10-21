@@ -9,6 +9,6 @@ self.onmessage=async({data})=>{try{
  const result=solve(apply(normalizeScramble(data.rawScramble)),0,tables,{limit:1});
  const correction=result.solutions[0].alg;
  const scramble=crossSolvedScramble(data.rawScramble,correction);
- const plan=presentF2L(solveF2L(apply(normalizeScramble(scramble)),catalog));
+ const plan=presentF2L(solveF2L(apply(normalizeScramble(scramble)),catalog,{randomFirst:true}));
  postMessage({type:'result',scramble,steps:plan.steps});
  }catch(error){postMessage({type:'error',message:error.message});}};

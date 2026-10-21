@@ -108,3 +108,21 @@ assert.equal(lookaheadPlan.lookaheadCost,Math.min(...orders.map(o=>o.cost)));
 const visibleRoots=new Set(orders.filter(o=>pairVisibility(lookaheadState,o.path[0].slot).cost===0).map(o=>o.path[0].slot));assert.ok(visibleRoots.size>1);
 const rootCosts=[...visibleRoots].map(p=>Math.min(...orders.filter(o=>o.path[0].slot===p).map(o=>o.cost)));assert.ok(Math.max(...rootCosts)>Math.min(...rootCosts));
 console.log('Back-piece visibility, current-grip orientation, easier-pair priority and exhaustive full-order lookahead passed.');
+
+// A uniform draw selects each viable unsolved first pair, including hidden
+// pairs. Each selected branch still uses visibility lookahead thereafter.
+const randomizedFirst=new Set();
+for(let i=0;i<4;i++){
+ const result=solveF2L(lookaheadState,catalog,{randomFirst:true,random:()=> (i+.5)/4});
+ const first=result.steps.find(s=>s.alg);randomizedFirst.add(first.slot);
+ assert.equal(first.slot,['FR','FL','BL','BR'][i]);
+ assert.equal(solvedMask(execute(lookaheadState,result.alg)),15);
+ const rootIndex=i,expected=Math.min(...orders.filter(o=>o.path[0].slot===rootIndex).map(o=>o.cost));assert.equal(result.lookaheadCost,expected);
+ const ergonomic=presentF2L(result);assert.deepEqual(execute(lookaheadState,flattenNotation(ergonomic.alg).alg),execute(lookaheadState,result.alg));
+}
+assert.equal(randomizedFirst.size,4);
+let draws=0;
+assert.equal(solveF2L(apply(''),catalog,{randomFirst:true,random:()=>{draws++;return 0;}}).steps.filter(s=>s.alg).length,0);assert.equal(draws,0);
+const onePair=apply(inverse("U R U' R'"));
+assert.equal(solveF2L(onePair,catalog,{randomFirst:true,random:()=>.999}).steps.find(s=>s.alg).slot,'FR');
+console.log('Uniform first-pair choice, solved-pair exclusion, complete replay, and remaining-pair lookahead passed.');
