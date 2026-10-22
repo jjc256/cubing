@@ -78,13 +78,13 @@ function executionFor(step,initialFrame){
  const setupAlg=setup.filter(Boolean).join(' '),alg=simplifyNotation([setupAlg,step.sourceAlg].filter(Boolean).join(' '));
  return {setup:setupAlg,alg,frame:flattenNotation(step.sourceAlg,desired).frame};
 }
-export function solveF2L(initial,catalog,{randomFirst=false,random=Math.random}={}){
+export function solveF2L(initial,catalog){
  if(!crossSolved(initial))throw Error('The white cross must be solved before F2L.');
  const memo=new Map();
- function search(state,frame,randomize=false){
+ function search(state,frame){
   const locked=solvedMask(state);if(locked===15)return {path:[],visibility:0,rotations:0,moves:0};
   const key=state.join(',')+':'+Object.values(frame).join('');if(memo.has(key))return memo.get(key);
-  let best=null;const choices=[];
+  let best=null;
   for(let p=0;p<4;p++)if(!(locked&(1<<p))){
    const answer=direct(state,p,locked,catalog)||withExtraction(state,p,locked,catalog);if(!answer)continue;
    const after=answer.after&& !answer.extraction?answer.after:execute(state,answer.alg);
@@ -92,13 +92,11 @@ export function solveF2L(initial,catalog,{randomFirst=false,random=Math.random}=
    const recognition=pairVisibility(state,p,frame);
    const candidate={path:[{...answer,recognition},...future.path],visibility:recognition.cost+.5*future.visibility,
     rotations:execution.alg.split(' ').filter(t=>/^[xyz]/.test(t)).length+future.rotations,moves:turns(execution.alg)+future.moves};
-   choices.push(candidate);
    if(!best||candidate.visibility<best.visibility||candidate.visibility===best.visibility&&(candidate.rotations<best.rotations||candidate.rotations===best.rotations&&candidate.moves<best.moves))best=candidate;
   }
-  if(randomize&&choices.length)best=choices[Math.floor(random()*choices.length)];
   memo.set(key,best);return best;
  }
- const plan=search(initial,identityFrame(),randomFirst);if(!plan)throw Error('No cross-preserving F2L plan was found.');
+ const plan=search(initial,identityFrame());if(!plan)throw Error('No cross-preserving F2L plan was found.');
  let state=initial,prior='';const steps=[],recorded=new Set();
  function recordSolved(){const locked=solvedMask(state);for(let p=0;p<4;p++)if((locked&(1<<p))&&!recorded.has(p)){steps.push({slot:slotNames[p],alg:'',before:prior,alreadySolved:true,solvedByEarlier:!!prior});recorded.add(p);}}
  recordSolved();

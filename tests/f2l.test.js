@@ -109,28 +109,10 @@ const visibleRoots=new Set(orders.filter(o=>pairVisibility(lookaheadState,o.path
 const rootCosts=[...visibleRoots].map(p=>Math.min(...orders.filter(o=>o.path[0].slot===p).map(o=>o.cost)));assert.ok(Math.max(...rootCosts)>Math.min(...rootCosts));
 console.log('Back-piece visibility, current-grip orientation, easier-pair priority and exhaustive full-order lookahead passed.');
 
-// A uniform draw selects each viable unsolved first pair, including hidden
-// pairs. Each selected branch still uses visibility lookahead thereafter.
-const randomizedFirst=new Set();
-for(let i=0;i<4;i++){
- const result=solveF2L(lookaheadState,catalog,{randomFirst:true,random:()=> (i+.5)/4});
- const first=result.steps.find(s=>s.alg);randomizedFirst.add(first.slot);
- assert.equal(first.slot,['FR','FL','BL','BR'][i]);
- assert.equal(solvedMask(execute(lookaheadState,result.alg)),15);
- const rootIndex=i,expected=Math.min(...orders.filter(o=>o.path[0].slot===rootIndex).map(o=>o.cost));assert.equal(result.lookaheadCost,expected);
- const ergonomic=presentF2L(result);assert.deepEqual(execute(lookaheadState,flattenNotation(ergonomic.alg).alg),execute(lookaheadState,result.alg));
-}
-assert.equal(randomizedFirst.size,4);
-let draws=0;
-assert.equal(solveF2L(apply(''),catalog,{randomFirst:true,random:()=>{draws++;return 0;}}).steps.filter(s=>s.alg).length,0);assert.equal(draws,0);
-const onePair=apply(inverse("U R U' R'"));
-assert.equal(solveF2L(onePair,catalog,{randomFirst:true,random:()=>.999}).steps.find(s=>s.alg).slot,'FR');
-console.log('Uniform first-pair choice, solved-pair exclusion, complete replay, and remaining-pair lookahead passed.');
-
 // Each starting yaw gets its own local solving frame; the source algorithm
 // does not undo a cosmetic rotation. Replay real stickers in all four frames.
 for(let yaw=0;yaw<4;yaw++){
- const oriented=f2lOrientation(reported,yaw),plan=presentF2L(solveF2L(oriented.state,catalog,{randomFirst:true,random:()=>.5}));
+ const oriented=f2lOrientation(reported,yaw),plan=presentF2L(solveF2L(oriented.state,catalog));
  assert.ok(crossSolved(oriented.state));assert.equal(solvedMask(execute(oriented.state,flattenNotation(plan.alg).alg)),15);
  const endFrame=flattenNotation(plan.alg).frame,ss=stickersFor(reported+' '+oriented.rotation+' '+plan.alg+' '+alignFrame(endFrame,identityFrame())),centers=ss.filter(s=>s.p.filter(v=>v!==0).length===1);
  for(const sticker of ss.filter(s=>s.p[1]<=0)){const center=centers.find(c=>c.n.every((v,i)=>v===sticker.n[i]));assert.equal(sticker.color,center.color);}
@@ -139,3 +121,15 @@ for(let yaw=0;yaw<4;yaw++){
  const right=start.find(s=>s.p.join(',')==='1,0,0'&&s.n.join(',')==='1,0,0');assert.deepEqual(oriented.pairColors.FR.toLowerCase().split(' / ').sort(),[names[front.color],names[right.color]].map(s=>s.toLowerCase()).sort());
 }
 console.log('All four starting fronts, physical F2L replay, and orientation-dependent pair colors passed.');
+
+// Only orientation is random. The worker must use the same optimized plan
+// as the visibility solver, including its first pair, in every starting yaw.
+const originalRandom=Math.random;
+try{for(let yaw=0;yaw<4;yaw++){
+ let draws=0;Math.random=()=>{draws++;return (yaw+.5)/4;};const offset=messages.length;
+ await self.onmessage({data:{rawScramble:reported}});
+ const result=messages.slice(offset).find(m=>m.type==='result');assert.ok(result);assert.equal(result.yaw,yaw);assert.equal(draws,1);
+ const orientation=f2lOrientation(result.scramble,yaw),expected=presentF2L(solveF2L(orientation.state,catalog));
+ assert.deepEqual(result.steps.map(s=>[s.slot,s.alg]),expected.steps.map(s=>[s.slot,s.alg]));
+}}finally{Math.random=originalRandom;}
+console.log('Only starting orientation is randomized; first pair and remaining order use optimized visibility lookahead.');

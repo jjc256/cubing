@@ -10,6 +10,6 @@ self.onmessage=async({data})=>{try{
  const correction=result.solutions[0].alg;
  const scramble=crossSolvedScramble(data.rawScramble,correction);
  const yaw=Math.floor(Math.random()*4),orientation=f2lOrientation(scramble,yaw);
- const plan=presentF2L(solveF2L(orientation.state,catalog,{randomFirst:true}));
+ const plan=presentF2L(solveF2L(orientation.state,catalog));
  postMessage({type:'result',scramble,yaw,rotation:orientation.rotation,front:orientation.front,steps:plan.steps.map(step=>({...step,colors:orientation.pairColors[step.slot]}))});
  }catch(error){postMessage({type:'error',message:error.message});}};
